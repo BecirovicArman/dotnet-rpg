@@ -3,97 +3,105 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using AutoMapper;
+using dotnet_rpg.Data;
 using dotnet_rpg.DTOs.Character;
+using Microsoft.EntityFrameworkCore;
 
 namespace dotnet_rpg.Services
 {
     public class CharacterService : ICharacterService
     {
-        private static List<Character> characters = new()
-        {
-            new Character(),
-            new Character{ Id = 1, Name = "Sam" }
-        };
-
         private readonly IMapper _mapper;
+        private readonly DataContext _context;
 
-        public CharacterService(IMapper mapper)
+        public CharacterService(IMapper mapper, DataContext context)
         {
             _mapper = mapper;
+            _context = context;
         }
 
         public async Task<ServiceResponse<List<GetCharacterDto>>> AddCharacter(AddCharacterDto newCharacter)
         {
-            var serviceResponse = new ServiceResponse<List<GetCharacterDto>>();
+            var response = new ServiceResponse<List<GetCharacterDto>>();
             Character character = _mapper.Map<Character>(newCharacter);
-            character.Id = characters.Max(x => x.Id) + 1;
-            characters.Add(character);
 
-            serviceResponse.Data = characters.Select(x => _mapper.Map<GetCharacterDto>(x)).ToList();
-            return serviceResponse;
+            _context.Characters.Add(character);
+            await _context.SaveChangesAsync();
+
+            response.Data = await _context.Characters
+                .Select(x => _mapper.Map<GetCharacterDto>(x))
+                .ToListAsync();
+
+            return response;
         }
 
         public async Task<ServiceResponse<List<GetCharacterDto>>> DeleteCharacter(int id)
         {
-            var serviceResponse = new ServiceResponse<List<GetCharacterDto>>();
+            var response = new ServiceResponse<List<GetCharacterDto>>();
 
             try
             {
-                Character character = characters.First(x => x.Id == id);
-                characters.Remove(character);
+                var character = await _context.Characters.FirstAsync(x => x.Id == id);
+                _context.Characters.Remove(character);
+                await _context.SaveChangesAsync();
 
-                serviceResponse.Data = characters.Select(x => _mapper.Map<GetCharacterDto>(x)).ToList();
+                response.Data = _context.Characters.Select(x => _mapper.Map<GetCharacterDto>(x)).ToList();
             }
             catch (Exception ex)
             {
-                serviceResponse.Success = false;
-                serviceResponse.Message = ex.Message;
+                response.Success = false;
+                response.Message = ex.Message;
             }
 
-            return serviceResponse;
+            return response;
         }
 
         public async Task<ServiceResponse<List<GetCharacterDto>>> GetAllCharacters()
         {
-            return new ServiceResponse<List<GetCharacterDto>>
-            {
-                Data = characters.Select(x => _mapper.Map<GetCharacterDto>(x)).ToList()
-            };
+            var response = new ServiceResponse<List<GetCharacterDto>>();
+            var dbCharacters = await _context.Characters.ToListAsync();
+            response.Data = dbCharacters.Select(x => _mapper.Map<GetCharacterDto>(x)).ToList();
+
+            return response;
         }
 
         public async Task<ServiceResponse<GetCharacterDto>> GetCharacterById(int id)
         {
-            var serviceResponse = new ServiceResponse<GetCharacterDto>();
-            var character = characters.FirstOrDefault(x => x.Id == id);
-            serviceResponse.Data = _mapper.Map<GetCharacterDto>(character);
-            return serviceResponse;
+            var response = new ServiceResponse<GetCharacterDto>();
+            var dbCharacter = await _context.Characters.FirstOrDefaultAsync(x => x.Id == id);
+            response.Data = _mapper.Map<GetCharacterDto>(dbCharacter);
+
+            return response;
         }
 
         public async Task<ServiceResponse<GetCharacterDto>> UpdateCharacter(UpdateCharacterDto updatedCharacter)
         {
-            var serviceResponse = new ServiceResponse<GetCharacterDto>();
+            var response = new ServiceResponse<GetCharacterDto>();
 
             try
             {
-                Character character = characters.FirstOrDefault(x => x.Id == updatedCharacter.Id);
+                var character = await _context.Characters
+                    .FirstOrDefaultAsync(x => x.Id == updatedCharacter.Id);
 
-                _mapper.Map(updatedCharacter, character);
-                // character.Name = updatedCharacter.Name;
-                // character.HitPoints = updatedCharacter.HitPoints;
-                // character.Strength = updatedCharacter.Strength;
-                // character.Defence = updatedCharacter.Defence;
-                // character.Intelligence = updatedCharacter.Intelligence;
-                // character.Class = updatedCharacter.Class;
+                // _mapper.Map(updatedCharacter, character);
+                character.Name = updatedCharacter.Name;
+                character.HitPoints = updatedCharacter.HitPoints;
+                character.Strength = updatedCharacter.Strength;
+                character.Defence = updatedCharacter.Defence;
+                character.Intelligence = updatedCharacter.Intelligence;
+                character.Class = updatedCharacter.Class;
 
-                serviceResponse.Data = _mapper.Map<GetCharacterDto>(character);
+                await _context.SaveChangesAsync();
+
+                response.Data = _mapper.Map<GetCharacterDto>(character);
             }
             catch (Exception ex)
             {
-                serviceResponse.Success = false;
-                serviceResponse.Message = ex.Message;
+                response.Success = false;
+                response.Message = ex.Message;
             }
 
-            return serviceResponse;
+            return response;
         }
     }
 }
